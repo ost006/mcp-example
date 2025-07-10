@@ -1,0 +1,47 @@
+{
+  "name": "mcp-hello-world-server",
+  "version": "1.0.0",
+  "description": "Simple TypeScript-based MCP server with hello world function",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "start:http": "node dist/http-server.js",
+    "start:http:open": "ENABLE_DNS_REBINDING_PROTECTION=false node dist/http-server.js",
+    "dev": "ts-node src/server.ts",
+    "dev:http": "ts-node src/http-server.ts",
+    "dev:http:open": "ENABLE_DNS_REBINDING_PROTECTION=false ts-node src/http-server.ts",
+    "clean": "rm -rf dist",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "format": "prettier --write src/**/*.ts *.json *.md",
+    "format:check": "prettier --check src/**/*.ts *.json *.md",
+    "check": "npm run lint && npm run format:check",
+    "fix": "npm run lint:fix && npm run format"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.15.0",
+    "express": "^4.18.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.30.1",
+    "@types/express": "^4.17.0",
+    "@types/node": "^20.19.6",
+    "@typescript-eslint/eslint-plugin": "^8.36.0",
+    "@typescript-eslint/parser": "^8.36.0",
+    "eslint": "^9.30.1",
+    "eslint-config-prettier": "^10.1.5",
+    "prettier": "^3.6.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  },
+  "keywords": [
+    "mcp",
+    "server",
+    "typescript",
+    "hello-world"
+  ],
+  "author": "",
+  "license": "MIT"
+}

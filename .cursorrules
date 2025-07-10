@@ -1,0 +1,69 @@
+## Code Generation Rules for Cursor AI Agent
+
+### Language Requirements
+- **NEVER use Korean characters in any code generation**
+- **ALL code, comments, variable names, function names, class names, and strings MUST be in English only**
+- **ALL documentation and comments MUST be written in English**
+
+### Specific Restrictions
+- No Korean characters (한글) in:
+  - Variable names
+  - Function names
+  - Class names
+  - Interface names
+  - Type names
+  - String literals
+  - Template literals
+  - Comments (single-line // and multi-line /* */)
+  - JSDoc comments
+  - Console.log messages
+  - Error messages
+  - Any other text content
+
+### Code Style
+- Use TypeScript strict mode
+- Follow ESLint rules configured in .eslintrc.js
+- Use Prettier formatting
+- Add final newline to all files
+- Use 2 spaces for indentation
+- Use single quotes for strings
+- Use semicolons
+
+### Examples of FORBIDDEN code:
+```javascript
+// ❌ WRONG - Korean characters
+const 사용자명 = 'John';
+function 계산하기() { /* 계산 로직 */ }
+console.log('안녕하세요');
+
+// ❌ WRONG - Korean comments
+// 이 함수는 사용자 정보를 가져옵니다
+function getUserInfo() {
+  return user;
+}
+```
+
+### Examples of CORRECT code:
+```javascript
+// ✅ CORRECT - English only
+const userName = 'John';
+function calculateTotal() { /* calculation logic */ }
+console.log('Hello World');
+
+// ✅ CORRECT - English comments
+// This function retrieves user information
+function getUserInfo() {
+  return user;
+}
+```
+
+### File Requirements
+- All files must end with a newline
+- Use UTF-8 encoding
+- Use LF line endings
+- Follow TypeScript/JavaScript naming conventions
+
+### Error Prevention
+- Always check generated code for Korean characters before suggesting
+- If Korean input is provided, translate concepts to English equivalents
+- Suggest English alternatives for Korean technical terms
