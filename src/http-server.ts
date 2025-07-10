@@ -6,6 +6,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
+import { createQdrantServiceFromEnv } from './services/qdrant-service';
+import { registerQdrantTools } from './services/qdrant-tools';
 
 // Interface for transport configuration
 interface TransportConfig {
@@ -41,6 +43,9 @@ function createMcpServer(): McpServer {
     version: '1.0.0',
   });
 
+  // Initialize Qdrant service
+  const qdrantService = createQdrantServiceFromEnv();
+
   // Register the hello world tool
   server.registerTool(
     'hello_world',
@@ -67,6 +72,9 @@ function createMcpServer(): McpServer {
       };
     }
   );
+
+  // Register Qdrant tools
+  registerQdrantTools(server, qdrantService);
 
   return server;
 }

@@ -1,11 +1,17 @@
 # Hello World MCP Server
 
-A simple TypeScript-based Model Context Protocol (MCP) server that provides a basic "Hello World" function.
+A TypeScript-based Model Context Protocol (MCP) server that provides a basic "Hello World" function and comprehensive Qdrant vector database integration.
 
 ## Features
 
 - Simple MCP server implementation using TypeScript
 - Single `hello_world` tool that returns a greeting message
+- **Qdrant Vector Database Integration**:
+  - Complete CRUD operations for vector collections
+  - Vector similarity search capabilities
+  - Collection management (create, delete, info)
+  - Configurable connection settings
+  - Error handling and connection testing
 - Optional name parameter for personalized greetings
 - Proper error handling and graceful shutdown
 - Strict code quality with ESLint and Prettier
@@ -100,12 +106,23 @@ npm run dev:http
 
 ### Environment Variables
 
+#### HTTP Server Configuration
+
 | Variable                          | Default               | Description                                      |
 | --------------------------------- | --------------------- | ------------------------------------------------ |
 | `PORT`                            | `3000`                | Server port number                               |
 | `ENABLE_DNS_REBINDING_PROTECTION` | `false`               | Enable/disable DNS rebinding protection          |
 | `ALLOWED_HOSTS`                   | `127.0.0.1,localhost` | Comma-separated list of allowed hosts            |
 | `ALLOWED_ORIGINS`                 | -                     | Comma-separated list of allowed origins for CORS |
+
+#### Qdrant Configuration
+
+| Variable         | Default     | Description                                  |
+| ---------------- | ----------- | -------------------------------------------- |
+| `QDRANT_HOST`    | `localhost` | Qdrant server hostname or IP address         |
+| `QDRANT_PORT`    | `6333`      | Qdrant server port number                    |
+| `QDRANT_API_KEY` | -           | API key for Qdrant authentication (optional) |
+| `QDRANT_HTTPS`   | `false`     | Use HTTPS for Qdrant connection              |
 
 ### Configuration Examples
 
@@ -174,6 +191,189 @@ Returns a simple hello world message.
 
 - Without name: Returns "Hello World!"
 - With name: Returns "Hello World, [name]!"
+
+### Qdrant Vector Database Tools
+
+#### qdrant_test_connection
+
+Tests the connection to Qdrant server.
+
+**Parameters:** None
+
+**Returns:** Connection status message
+
+#### qdrant_create_collection
+
+Creates a new collection in Qdrant.
+
+**Parameters:**
+
+- `collection_name` (string): Name of the collection to create
+- `vector_size` (number): Size of vectors (dimensions)
+- `distance` (optional): Distance metric ('Cosine', 'Euclidean', 'Dot')
+
+#### qdrant_list_collections
+
+Lists all collections in Qdrant.
+
+**Parameters:** None
+
+**Returns:** List of collection names
+
+#### qdrant_get_collection_info
+
+Gets detailed information about a specific collection.
+
+**Parameters:**
+
+- `collection_name` (string): Name of the collection
+
+**Returns:** Collection statistics and configuration
+
+#### qdrant_insert_vectors
+
+Inserts vectors into a Qdrant collection.
+
+**Parameters:**
+
+- `collection_name` (string): Name of the collection
+- `vectors` (array): Array of vector objects with id, vector, and optional payload
+
+**Example:**
+
+```json
+{
+  "collection_name": "my_collection",
+  "vectors": [
+    {
+      "id": "doc1",
+      "vector": [0.1, 0.2, 0.3, 0.4],
+      "payload": { "text": "Hello world", "category": "greeting" }
+    }
+  ]
+}
+```
+
+#### qdrant_search_vectors
+
+Searches for similar vectors in a collection.
+
+**Parameters:**
+
+- `collection_name` (string): Name of the collection
+- `query_vector` (array): Query vector to search for
+- `limit` (optional, number): Maximum number of results (default: 10)
+- `score_threshold` (optional, number): Minimum similarity score threshold
+
+**Returns:** Array of similar vectors with scores and metadata
+
+#### qdrant_get_vectors
+
+Retrieves vectors by their IDs.
+
+**Parameters:**
+
+- `collection_name` (string): Name of the collection
+- `ids` (array): Array of vector IDs to retrieve
+
+**Returns:** Array of vectors with their data and metadata
+
+#### qdrant_delete_vectors
+
+Deletes vectors by their IDs.
+
+**Parameters:**
+
+- `collection_name` (string): Name of the collection
+- `ids` (array): Array of vector IDs to delete
+
+#### qdrant_count_vectors
+
+Counts the number of vectors in a collection.
+
+**Parameters:**
+
+- `collection_name` (string): Name of the collection
+
+**Returns:** Number of vectors in the collection
+
+#### qdrant_delete_collection
+
+Deletes a collection from Qdrant.
+
+**Parameters:**
+
+- `collection_name` (string): Name of the collection to delete
+
+## Qdrant Setup
+
+### Prerequisites
+
+1. **Install Qdrant Server**:
+
+   **Using Docker:**
+
+   ```bash
+   docker run -p 6333:6333 -p 6334:6334 -v $(pwd)/qdrant_storage:/qdrant/storage:z qdrant/qdrant
+   ```
+
+   **Using Qdrant Cloud:**
+   Sign up at [Qdrant Cloud](https://cloud.qdrant.io/) and get your API key and endpoint.
+
+2. **Configure Environment Variables**:
+
+   Copy `.env.example` to `.env` and configure your Qdrant settings:
+
+   ```bash
+   cp .env.example .env
+   # Edit .env with your Qdrant configuration
+   ```
+
+### Quick Start with Qdrant
+
+1. **Start Qdrant Server**:
+
+   ```bash
+   docker run -p 6333:6333 qdrant/qdrant
+   ```
+
+2. **Test Connection**:
+   Use the `qdrant_test_connection` tool to verify connectivity.
+
+3. **Create a Collection**:
+
+   ```bash
+   # Example: Create a collection for 768-dimensional vectors (e.g., for embeddings)
+   qdrant_create_collection {
+     "collection_name": "embeddings",
+     "vector_size": 768,
+     "distance": "Cosine"
+   }
+   ```
+
+4. **Insert Vectors**:
+
+   ```bash
+   qdrant_insert_vectors {
+     "collection_name": "embeddings",
+     "vectors": [
+       {
+         "id": "doc1",
+         "vector": [0.1, 0.2, ...], // 768 dimensions
+         "payload": {"text": "Sample document", "category": "example"}
+       }
+     ]
+   }
+   ```
+
+5. **Search Vectors**:
+   ```bash
+   qdrant_search_vectors {
+     "collection_name": "embeddings",
+     "query_vector": [0.1, 0.2, ...], // 768 dimensions
+     "limit": 5
+   }
+   ```
 
 ## Server Configuration
 

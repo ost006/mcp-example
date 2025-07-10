@@ -3,12 +3,17 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
+import { createQdrantServiceFromEnv } from './services/qdrant-service';
+import { registerQdrantTools } from './services/qdrant-tools';
 
 // Create server instance
 const server = new McpServer({
   name: 'hello-world-mcp-server',
   version: '1.0.0',
 });
+
+// Initialize Qdrant service
+const qdrantService = createQdrantServiceFromEnv();
 
 // Register the hello world tool
 server.registerTool(
@@ -37,11 +42,15 @@ server.registerTool(
   }
 );
 
+// Register Qdrant tools
+registerQdrantTools(server, qdrantService);
+
 // Start the server
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error('Hello World MCP server running on stdio');
+  console.error('Available tools: hello_world, qdrant_*');
 }
 
 // Handle graceful shutdown
