@@ -1,5 +1,112 @@
 import { QdrantClient } from '@qdrant/js-client-rest';
 
+// Document type enumeration
+export enum DocumentType {
+  ARTICLE = 'article',
+  CODE = 'code',
+  QA = 'qa',
+  TUTORIAL = 'tutorial',
+  REFERENCE = 'reference',
+  NEWS = 'news',
+  CONVERSATION = 'conversation'
+}
+
+// Source type enumeration
+export enum SourceType {
+  WEB = 'web',
+  FILE = 'file',
+  API = 'api',
+  DATABASE = 'database',
+  USER_INPUT = 'user_input'
+}
+
+// Document metadata interface
+export interface DocumentMetadata {
+  // Basic information
+  id: string;
+  title: string;
+  content: string;
+  chunk_index: number;
+  total_chunks: number;
+  
+  // Classification information
+  document_type: DocumentType;
+  source_type: SourceType;
+  category: string;
+  tags: string[];
+  
+  // Source information
+  source_url?: string;
+  source_path?: string;
+  source_id?: string;
+  
+  // Time information
+  created_at: string;
+  updated_at: string;
+  published_at?: string;
+  
+  // Content information
+  language: string;
+  word_count: number;
+  reading_time: number;
+  
+  // Embedding information
+  embedding_model: string;
+  embedding_version: string;
+  
+  // Quality management
+  quality_score?: number;
+  verification_status?: 'verified' | 'unverified' | 'flagged';
+  
+  // Additional metadata
+  custom_fields?: Record<string, unknown>;
+}
+
+// Collection configuration
+export interface CollectionConfig {
+  name: string;
+  vector_size: number;
+  distance: 'Cosine' | 'Euclidean' | 'Dot';
+}
+
+// Predefined collection configurations
+export const COLLECTION_CONFIGS: Record<string, CollectionConfig> = {
+  documents: {
+    name: 'documents',
+    vector_size: 1536, // OpenAI text-embedding-3-small
+    distance: 'Cosine'
+  },
+  code_snippets: {
+    name: 'code_snippets',
+    vector_size: 1536,
+    distance: 'Cosine'
+  },
+  qa_pairs: {
+    name: 'qa_pairs',
+    vector_size: 1536,
+    distance: 'Cosine'
+  },
+  conversations: {
+    name: 'conversations',
+    vector_size: 1536,
+    distance: 'Cosine'
+  }
+};
+
+// Search filter interface
+export interface SearchFilter {
+  document_type?: DocumentType | DocumentType[];
+  source_type?: SourceType | SourceType[];
+  category?: string | string[];
+  tags?: string | string[];
+  language?: string;
+  created_after?: string;
+  created_before?: string;
+  quality_score_min?: number;
+  verification_status?: 'verified' | 'unverified' | 'flagged';
+  custom_filters?: Record<string, unknown>;
+}
+
 export interface QdrantConfig {
   host: string;
   port: number;
@@ -10,13 +117,13 @@ export interface QdrantConfig {
 export interface VectorDocument {
   id: string | number;
   vector: number[];
-  payload?: Record<string, unknown>;
+  payload?: DocumentMetadata;
 }
 
 export interface SearchResult {
   id: string | number;
   score: number;
-  payload?: Record<string, unknown>;
+  payload?: DocumentMetadata;
 }
 
 export interface CollectionInfo {
@@ -92,6 +199,34 @@ export class QdrantService {
   }
 
   /**
+   * Create a collection using predefined configuration
+   */
+  async createCollectionFromConfig(configName: string): Promise<void> {
+    const config = COLLECTION_CONFIGS[configName];
+    if (!config) {
+      throw new Error(`Unknown collection configuration: ${configName}`);
+    }
+
+    await this.createCollection(config.name, config.vector_size, config.distance);
+  }
+
+  /**
+   * Create all predefined collections
+   */
+  async createAllPredefinedCollections(): Promise<void> {
+    const collectionNames = Object.keys(COLLECTION_CONFIGS);
+    
+    for (const configName of collectionNames) {
+      try {
+        await this.createCollectionFromConfig(configName);
+        console.log(`Created collection: ${COLLECTION_CONFIGS[configName]?.name || 'unknown'}`);
+      } catch (error) {
+        console.warn(`Failed to create collection ${configName}: ${error}`);
+      }
+    }
+  }
+
+  /**
    * Delete a collection
    */
   async deleteCollection(collectionName: string): Promise<void> {
@@ -158,13 +293,14 @@ export class QdrantService {
   }
 
   /**
-   * Search for similar vectors
+   * Search for similar vectors with optional metadata filtering
    */
   async searchVectors(
     collectionName: string,
     queryVector: number[],
     limit: number = 10,
-    scoreThreshold?: number
+    scoreThreshold?: number,
+    filters?: SearchFilter
   ): Promise<SearchResult[]> {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -178,6 +314,14 @@ export class QdrantService {
         searchParams.score_threshold = scoreThreshold;
       }
 
+      // Add metadata filters if provided
+      if (filters) {
+        const qdrantFilter = this.buildQdrantFilter(filters);
+        if (qdrantFilter) {
+          searchParams.filter = qdrantFilter;
+        }
+      }
+
       const response = await this.client.search(collectionName, searchParams);
 
       return response.map((point) => {
@@ -187,7 +331,7 @@ export class QdrantService {
         };
 
         if (point.payload) {
-          result.payload = point.payload;
+          result.payload = point.payload as unknown as DocumentMetadata;
         }
 
         return result;
@@ -195,6 +339,108 @@ export class QdrantService {
     } catch (error) {
       throw new Error(`Failed to search vectors: ${error}`);
     }
+  }
+
+  /**
+   * Build Qdrant filter from SearchFilter
+   */
+  private buildQdrantFilter(filters: SearchFilter): any {
+    const conditions: any[] = [];
+
+    // Document type filter
+    if (filters.document_type) {
+      const docTypes = Array.isArray(filters.document_type) 
+        ? filters.document_type 
+        : [filters.document_type];
+      conditions.push({
+        key: 'document_type',
+        match: { any: docTypes }
+      });
+    }
+
+    // Source type filter
+    if (filters.source_type) {
+      const sourceTypes = Array.isArray(filters.source_type) 
+        ? filters.source_type 
+        : [filters.source_type];
+      conditions.push({
+        key: 'source_type',
+        match: { any: sourceTypes }
+      });
+    }
+
+    // Category filter
+    if (filters.category) {
+      const categories = Array.isArray(filters.category) 
+        ? filters.category 
+        : [filters.category];
+      conditions.push({
+        key: 'category',
+        match: { any: categories }
+      });
+    }
+
+    // Tags filter
+    if (filters.tags) {
+      const tags = Array.isArray(filters.tags) 
+        ? filters.tags 
+        : [filters.tags];
+      conditions.push({
+        key: 'tags',
+        match: { any: tags }
+      });
+    }
+
+    // Language filter
+    if (filters.language) {
+      conditions.push({
+        key: 'language',
+        match: { value: filters.language }
+      });
+    }
+
+    // Date range filters
+    if (filters.created_after) {
+      conditions.push({
+        key: 'created_at',
+        range: { gte: filters.created_after }
+      });
+    }
+
+    if (filters.created_before) {
+      conditions.push({
+        key: 'created_at',
+        range: { lte: filters.created_before }
+      });
+    }
+
+    // Quality score filter
+    if (filters.quality_score_min !== undefined) {
+      conditions.push({
+        key: 'quality_score',
+        range: { gte: filters.quality_score_min }
+      });
+    }
+
+    // Verification status filter
+    if (filters.verification_status) {
+      conditions.push({
+        key: 'verification_status',
+        match: { value: filters.verification_status }
+      });
+    }
+
+    // Custom filters
+    if (filters.custom_filters) {
+      Object.entries(filters.custom_filters).forEach(([key, value]) => {
+        conditions.push({
+          key: `custom_fields.${key}`,
+          match: { value }
+        });
+      });
+    }
+
+    return conditions.length > 0 ? { must: conditions } : null;
   }
 
   /**
@@ -218,7 +464,7 @@ export class QdrantService {
         };
 
         if (point.payload) {
-          result.payload = point.payload;
+          result.payload = point.payload as unknown as DocumentMetadata;
         }
 
         return result;

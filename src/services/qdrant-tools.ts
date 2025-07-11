@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { QdrantService } from './qdrant-service';
+import { QdrantService, DocumentType, SourceType, COLLECTION_CONFIGS, VectorDocument, SearchFilter } from './qdrant-service';
 
 export function registerQdrantTools(
   server: McpServer,
@@ -161,7 +161,7 @@ export function registerQdrantTools(
     'qdrant_insert_vectors',
     {
       title: 'Insert Vectors',
-      description: 'Insert vectors into a Qdrant collection',
+      description: 'Insert vectors with rich metadata into a Qdrant collection',
       inputSchema: {
         collection_name: z.string().describe('Name of the collection'),
         vectors: z
@@ -172,9 +172,47 @@ export function registerQdrantTools(
                 .describe('Unique ID for the vector'),
               vector: z.array(z.number()).describe('Vector values'),
               payload: z
-                .record(z.any())
-                .optional()
-                .describe('Optional metadata'),
+                .object({
+                  // Basic information
+                  id: z.string().describe('Document ID'),
+                  title: z.string().describe('Document title'),
+                  content: z.string().describe('Document content'),
+                  chunk_index: z.number().describe('Chunk index in document'),
+                  total_chunks: z.number().describe('Total chunks in document'),
+                  
+                  // Classification information
+                  document_type: z.nativeEnum(DocumentType).describe('Type of document'),
+                  source_type: z.nativeEnum(SourceType).describe('Source type'),
+                  category: z.string().describe('Document category'),
+                  tags: z.array(z.string()).describe('Document tags'),
+                  
+                  // Source information
+                  source_url: z.string().optional().describe('Source URL'),
+                  source_path: z.string().optional().describe('Source file path'),
+                  source_id: z.string().optional().describe('Source ID'),
+                  
+                  // Time information
+                  created_at: z.string().describe('Creation timestamp'),
+                  updated_at: z.string().describe('Update timestamp'),
+                  published_at: z.string().optional().describe('Publication timestamp'),
+                  
+                  // Content information
+                  language: z.string().describe('Content language'),
+                  word_count: z.number().describe('Word count'),
+                  reading_time: z.number().describe('Reading time in minutes'),
+                  
+                  // Embedding information
+                  embedding_model: z.string().describe('Embedding model used'),
+                  embedding_version: z.string().describe('Embedding version'),
+                  
+                  // Quality management
+                  quality_score: z.number().optional().describe('Quality score'),
+                  verification_status: z.enum(['verified', 'unverified', 'flagged']).optional().describe('Verification status'),
+                  
+                  // Additional metadata
+                  custom_fields: z.record(z.any()).optional().describe('Custom fields'),
+                })
+                .describe('Document metadata'),
             })
           )
           .describe('Array of vectors to insert'),
@@ -182,14 +220,7 @@ export function registerQdrantTools(
     },
     async ({ collection_name, vectors }) => {
       try {
-        // Ensure payload is properly typed
-        const typedVectors = vectors.map((vector) => ({
-          id: vector.id,
-          vector: vector.vector,
-          payload: vector.payload || {},
-        }));
-
-        await qdrantService.insertVectors(collection_name, typedVectors);
+        await qdrantService.insertVectors(collection_name, vectors as VectorDocument[]);
         return {
           content: [
             {
@@ -216,7 +247,7 @@ export function registerQdrantTools(
     'qdrant_search_vectors',
     {
       title: 'Search Vectors',
-      description: 'Search for similar vectors in a Qdrant collection',
+      description: 'Search for similar vectors with optional metadata filtering',
       inputSchema: {
         collection_name: z.string().describe('Name of the collection'),
         query_vector: z
@@ -230,15 +261,61 @@ export function registerQdrantTools(
           .number()
           .optional()
           .describe('Minimum similarity score threshold'),
+        filters: z
+          .object({
+            document_type: z
+              .union([z.nativeEnum(DocumentType), z.array(z.nativeEnum(DocumentType))])
+              .optional()
+              .describe('Filter by document type(s)'),
+            source_type: z
+              .union([z.nativeEnum(SourceType), z.array(z.nativeEnum(SourceType))])
+              .optional()
+              .describe('Filter by source type(s)'),
+            category: z
+              .union([z.string(), z.array(z.string())])
+              .optional()
+              .describe('Filter by category/categories'),
+            tags: z
+              .union([z.string(), z.array(z.string())])
+              .optional()
+              .describe('Filter by tag(s)'),
+            language: z
+              .string()
+              .optional()
+              .describe('Filter by language'),
+            created_after: z
+              .string()
+              .optional()
+              .describe('Filter by creation date (after)'),
+            created_before: z
+              .string()
+              .optional()
+              .describe('Filter by creation date (before)'),
+            quality_score_min: z
+              .number()
+              .optional()
+              .describe('Minimum quality score'),
+            verification_status: z
+              .enum(['verified', 'unverified', 'flagged'])
+              .optional()
+              .describe('Filter by verification status'),
+            custom_filters: z
+              .record(z.any())
+              .optional()
+              .describe('Custom field filters'),
+          })
+          .optional()
+          .describe('Optional metadata filters'),
       },
     },
-    async ({ collection_name, query_vector, limit, score_threshold }) => {
+    async ({ collection_name, query_vector, limit, score_threshold, filters }) => {
       try {
         const results = await qdrantService.searchVectors(
           collection_name,
           query_vector,
           limit,
-          score_threshold
+          score_threshold,
+          filters as SearchFilter
         );
 
         if (results.length === 0) {
@@ -442,6 +519,113 @@ export function registerQdrantTools(
             {
               type: 'text',
               text: `Error deleting collection: ${error}`,
+            },
+          ],
+        };
+      }
+    }
+  );
+
+  // Create collection from predefined config
+  server.registerTool(
+    'qdrant_create_collection_from_config',
+    {
+      title: 'Create Collection from Config',
+      description: 'Create a collection using predefined configuration',
+      inputSchema: {
+        config_name: z
+          .enum(['documents', 'code_snippets', 'qa_pairs', 'conversations'])
+          .describe('Name of the predefined configuration to use'),
+      },
+    },
+    async ({ config_name }) => {
+      try {
+        await qdrantService.createCollectionFromConfig(config_name);
+        const config = COLLECTION_CONFIGS[config_name];
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Collection '${config?.name}' created successfully using predefined configuration (vector_size: ${config?.vector_size}, distance: ${config?.distance})`,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Error creating collection from config: ${error}`,
+            },
+          ],
+        };
+      }
+    }
+  );
+
+  // Create all predefined collections
+  server.registerTool(
+    'qdrant_create_all_collections',
+    {
+      title: 'Create All Predefined Collections',
+      description: 'Create all predefined collections for RAG system',
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        await qdrantService.createAllPredefinedCollections();
+        const collectionNames = Object.keys(COLLECTION_CONFIGS);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Attempted to create all predefined collections: ${collectionNames.join(', ')}. Check logs for individual results.`,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Error creating collections: ${error}`,
+            },
+          ],
+        };
+      }
+    }
+  );
+
+  // List available collection configs
+  server.registerTool(
+    'qdrant_list_collection_configs',
+    {
+      title: 'List Collection Configurations',
+      description: 'List all available predefined collection configurations',
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        const configs = Object.entries(COLLECTION_CONFIGS)
+          .map(([name, config]) => 
+            `${name}: ${config.name} (vector_size: ${config.vector_size}, distance: ${config.distance})`
+          )
+          .join('\n');
+        
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Available collection configurations:\n${configs}`,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Error listing collection configs: ${error}`,
             },
           ],
         };
